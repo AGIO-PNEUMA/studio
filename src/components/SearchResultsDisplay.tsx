@@ -19,7 +19,7 @@ export interface SearchResultItem {
 interface SearchResultsDisplayProps {
   results: SearchResultItem[];
   isSearching: boolean;
-  isQueryExpanded: boolean;
+  aiExpansionAttempted: boolean; // Renamed from isQueryExpanded
   error: string | null;
   searchTerm: string;
 }
@@ -27,22 +27,26 @@ interface SearchResultsDisplayProps {
 export function SearchResultsDisplay({
   results,
   isSearching,
-  isQueryExpanded,
+  aiExpansionAttempted, // Using the renamed prop
   error,
   searchTerm,
 }: SearchResultsDisplayProps) {
-  if (isSearching || (searchTerm && isQueryExpanded && results.length === 0 && !error) ) {
+  // Show loader if actively searching OR if AI attempt was made, search term exists, but no results/error yet
+  if (isSearching || (searchTerm && aiExpansionAttempted && results.length === 0 && !error) ) {
     return (
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center text-2xl">
             <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" />
-            Searching...
+            {isSearching ? "Searching..." : "Processing..."}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-muted-foreground">
-            {isQueryExpanded ? "Expanding your search with AI and fetching results..." : "Preparing to search..."}
+            {/* Updated text based on whether AI expansion was part of the process */}
+            {aiExpansionAttempted && isSearching ? "Finalizing results after AI processing..." : 
+             isSearching ? "Fetching results..." : 
+             "Preparing your results..."}
           </p>
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="p-4 border rounded-lg">
@@ -85,7 +89,9 @@ export function SearchResultsDisplay({
      );
   }
   
-  if (results.length === 0 && searchTerm) {
+  // This condition will hit if not searching, no error, search term exists, but results are empty.
+  // This implies the search finished with no results.
+  if (results.length === 0 && searchTerm && !isSearching) {
     return (
       <Card className="shadow-lg">
         <CardContent className="pt-6">

@@ -15,7 +15,7 @@ export default function SocialEyePage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(ALL_PLATFORM_IDS));
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [isQueryExpanded, setIsQueryExpanded] = useState<boolean>(false); // True if AI expansion has happened
+  const [aiExpansionAttemptProcessed, setAiExpansionAttemptProcessed] = useState<boolean>(false); // True after AI expansion attempt (success or skip)
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -51,31 +51,38 @@ export default function SocialEyePage() {
     }
 
     setIsSearching(true);
-    setIsQueryExpanded(false);
+    setAiExpansionAttemptProcessed(false); // Reset before new search
     setSearchResults([]);
     setError(null);
 
     try {
       toast({
-        title: "Expanding Search Query...",
-        description: "Using AI to find variations of your search term.",
+        title: "Starting Search...",
+        description: "Checking for AI-powered query enhancements...",
       });
       const aiInput: ExpandSearchQueryInput = { query: trimmedSearchTerm };
       const aiOutput: ExpandSearchQueryOutput = await expandSearchQuery(aiInput);
-      setIsQueryExpanded(true); // Mark that AI expansion has occurred
+      setAiExpansionAttemptProcessed(true); 
 
-      // AI expansion is performed to inform the user, but its results are not used for link generation.
-      // Links will only be generated for the original (trimmed) search term.
-      
-      if (aiOutput && aiOutput.expandedQueries && aiOutput.expandedQueries.length > 0) {
+      if (aiOutput.aiExpansionPerformed && aiOutput.expandedQueries.length > 0) {
          toast({
-            title: "Query Expansion Complete!",
-            description: `AI found ${aiOutput.expandedQueries.length} potential variations. Searching with your original term: "${trimmedSearchTerm}".`,
+            title: "AI Query Expansion Successful!",
+            description: `AI found ${aiOutput.expandedQueries.length} potential variations. Now searching with your original term: "${trimmedSearchTerm}".`,
          });
-      } else {
+      } else if (!aiOutput.aiExpansionPerformed && aiOutput.aiExpansionSkippedReason === "API_KEY_MISSING") {
          toast({
-            title: "Query Expansion Note",
-            description: `No variations found by AI. Searching with your original term: "${trimmedSearchTerm}".`,
+            title: "AI Query Expansion Skipped",
+            description: `AI features are unavailable (API key not configured). Proceeding with original term: "${trimmedSearchTerm}".`,
+         });
+      } else if (!aiOutput.aiExpansionPerformed) {
+         toast({
+            title: "AI Query Expansion Notice",
+            description: `AI query expansion could not be performed. Proceeding with original term: "${trimmedSearchTerm}".`,
+         });
+      } else { // AI performed, but no new queries found
+         toast({
+            title: "AI Query Expansion Complete",
+            description: `No additional variations found by AI. Searching with your original term: "${trimmedSearchTerm}".`,
          });
       }
       
@@ -85,19 +92,16 @@ export default function SocialEyePage() {
       for (const platform of platformsToSearch) {
         const platformLinks: SearchResultItem['links'] = [];
         
-        // Generate links ONLY for the trimmedSearchTerm
         platform.searchUrlPatterns.forEach(patternFn => {
           platformLinks.push({
             url: patternFn(trimmedSearchTerm),
-            queryText: trimmedSearchTerm, // This will be the original (trimmed) searchTerm
+            queryText: trimmedSearchTerm, 
             isDirectAttempt: patternFn(trimmedSearchTerm).includes(`/${encodeURIComponent(trimmedSearchTerm.replace(/\s+/g, ''))}`), 
           });
         });
         
-        // Deduplicate links by URL for the same platform
         const uniqueLinks = Array.from(new Map(platformLinks.map(link => [link.url, link])).values());
         
-        // Only add platform to results if there are any links for it.
         if (uniqueLinks.length > 0) {
           results.push({ platform, links: uniqueLinks });
         }
@@ -131,12 +135,11 @@ export default function SocialEyePage() {
     }
   };
   
-  // Effect to clear results if search term is empty
   useEffect(() => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
       setError(null);
-      setIsQueryExpanded(false);
+      setAiExpansionAttemptProcessed(false);
     }
   }, [searchTerm]);
 
@@ -162,7 +165,7 @@ export default function SocialEyePage() {
           <SearchResultsDisplay
             results={searchResults}
             isSearching={isSearching}
-            isQueryExpanded={isQueryExpanded}
+            aiExpansionAttempted={aiExpansionAttemptProcessed}
             error={error}
             searchTerm={searchTerm.trim()} 
           />
