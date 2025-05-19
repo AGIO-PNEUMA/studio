@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -39,7 +40,8 @@ export default function SocialEyePage() {
   }, []);
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) {
+    const trimmedSearchTerm = searchTerm.trim();
+    if (!trimmedSearchTerm) {
       setError('Please enter a name or username to search.');
       return;
     }
@@ -58,45 +60,47 @@ export default function SocialEyePage() {
         title: "Expanding Search Query...",
         description: "Using AI to find variations of your search term.",
       });
-      const aiInput: ExpandSearchQueryInput = { query: searchTerm };
+      const aiInput: ExpandSearchQueryInput = { query: trimmedSearchTerm };
       const aiOutput: ExpandSearchQueryOutput = await expandSearchQuery(aiInput);
       setIsQueryExpanded(true); // Mark that AI expansion has occurred
 
-      let allQueries = [searchTerm];
-      if (aiOutput && aiOutput.expandedQueries) {
-        allQueries = [searchTerm, ...aiOutput.expandedQueries];
+      // AI expansion is performed to inform the user, but its results are not used for link generation.
+      // Links will only be generated for the original (trimmed) search term.
+      
+      if (aiOutput && aiOutput.expandedQueries && aiOutput.expandedQueries.length > 0) {
          toast({
             title: "Query Expansion Complete!",
-            description: `Found ${aiOutput.expandedQueries.length} additional variations.`,
+            description: `AI found ${aiOutput.expandedQueries.length} potential variations. Searching with your original term: "${trimmedSearchTerm}".`,
          });
       } else {
          toast({
             title: "Query Expansion Note",
-            description: "No additional variations found by AI, using original term.",
+            description: `No variations found by AI. Searching with your original term: "${trimmedSearchTerm}".`,
          });
       }
       
-      // Remove duplicates and ensure queries are unique strings
-      allQueries = [...new Set(allQueries.filter(q => typeof q === 'string' && q.trim() !== ''))];
-
-
       const results: SearchResultItem[] = [];
       const platformsToSearch = allPlatforms.filter(p => selectedPlatforms.has(p.id));
 
       for (const platform of platformsToSearch) {
         const platformLinks: SearchResultItem['links'] = [];
-        for (const query of allQueries) {
-          platform.searchUrlPatterns.forEach(patternFn => {
-            platformLinks.push({
-              url: patternFn(query),
-              queryText: query,
-              isDirectAttempt: patternFn(query).includes(`/${encodeURIComponent(query.replace(/\s+/g, ''))}`), // Heuristic for direct attempt
-            });
+        
+        // Generate links ONLY for the trimmedSearchTerm
+        platform.searchUrlPatterns.forEach(patternFn => {
+          platformLinks.push({
+            url: patternFn(trimmedSearchTerm),
+            queryText: trimmedSearchTerm, // This will be the original (trimmed) searchTerm
+            isDirectAttempt: patternFn(trimmedSearchTerm).includes(`/${encodeURIComponent(trimmedSearchTerm.replace(/\s+/g, ''))}`), 
           });
-        }
+        });
+        
         // Deduplicate links by URL for the same platform
         const uniqueLinks = Array.from(new Map(platformLinks.map(link => [link.url, link])).values());
-        results.push({ platform, links: uniqueLinks });
+        
+        // Only add platform to results if there are any links for it.
+        if (uniqueLinks.length > 0) {
+          results.push({ platform, links: uniqueLinks });
+        }
       }
       
       setSearchResults(results);
@@ -160,7 +164,7 @@ export default function SocialEyePage() {
             isSearching={isSearching}
             isQueryExpanded={isQueryExpanded}
             error={error}
-            searchTerm={searchTerm}
+            searchTerm={searchTerm.trim()} 
           />
         </div>
       </div>
